@@ -1,5 +1,6 @@
 import io
 import json
+import math
 import numpy as np
 import os
 from PIL import Image
@@ -132,15 +133,20 @@ def gui_main() -> None:
                     _query_url = f"http://localhost:{_query_port}/patch/{_patch_left}/{_patch_top}/{_patch_size}/{_patch_size}/{_patch_level}"
                     _req = requests.get(_query_url)
                     _list = json.loads(_req.text)
-                    _array = np.array(_list, dtype=np.uint8)
-                    _array = np.reshape(_array, (int(_patch_size), int(_patch_size), 3))
                     try:
+                        _size = int(int(_patch_size) / max([1, int(_patch_level) * 2]))
+                        _array = np.array(_list, dtype=np.uint8)
+                        print(f"Array size: {_array.shape}, width/height: {math.sqrt(len(_list) / 3)}, size: {_size}")
+                        _array = np.reshape(_array, (_size, _size, 3))
                         im = Image.fromarray(_array, 'RGB')
                         bio = io.BytesIO()
                         im.save(bio, format="PNG")
                         del im
-                        _window.Element('-PATCH-').set_size((int(_patch_size), int(_patch_size)))
-                        _window.Element('-PATCH-').change_coordinates(graph_bottom_left=(0, int(_patch_size)), graph_top_right=(int(_patch_size), 0))
+                        _window.Element('-PATCH-').set_size((_size, _size))
+                        _window.Element('-PATCH-').change_coordinates(
+                            graph_bottom_left=(0, _size),
+                            graph_top_right=(_size, 0)
+                        )
                         _window.Element('-PATCH-').draw_image(data=bio.getvalue(), location=(0, 0))
                     except TypeError:
                         traceback.print_exc()
