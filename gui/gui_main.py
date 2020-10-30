@@ -1,3 +1,6 @@
+import json
+import matplotlib.pyplot as plt
+import numpy as np
 import os
 import PySimpleGUI as Sg
 from pytypes import typechecked
@@ -69,7 +72,7 @@ def gui_main() -> None:
             ),
         ],
     ]
-    _window = Sg.Window('Test', _layout)
+    _window = Sg.Window('Test Area', _layout)
     while True:
         _event, _values = _window.read(timeout=1000)
         if _event is None or _event == 'Exit':
@@ -109,17 +112,25 @@ def gui_main() -> None:
                 _query_ports = Config.get_docker_backend_property('slide', 'ports')
                 if _query_ports is not None:
                     _query_port = _query_ports[list(_query_ports.keys())[0]]
-                    _query_url = f"http://localhost:{_query_port}"
+                    _query_url = f"http://localhost:{_query_port}/patch/1000/1000/64/64"
                     _req = requests.get(_query_url)
-                    print(_req.status_code)
-                    print(_req.encoding)
-                    print(_req.text)
+                    _list = json.loads(_req.text)
+                    _array = np.array(_list)
+                    print(_array)
+                    print(_array.shape)
+                    _array.resize((64, 64, 3))
+                    print(_array)
+                    print(_array.shape)
+                    plt.imshow(_array)
+                    plt.show()
                 else:
                     Sg.PopupError('Ports for query not properly configured in container')
             else:
                 Sg.PopupError('Slide backend is not currently running')
         _table_data = _docker_backend.get_running_containers()
         _window.Element('runningContainersTable').Update(_table_data)
+    if _docker_backend.is_backend_running('slide'):
+        _docker_backend.stop_backend('slide')
     _docker_backend = None
     _window.close()
 

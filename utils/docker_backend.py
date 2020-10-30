@@ -31,7 +31,9 @@ class DockerBackend(object):
             self.backends[_name] = _backend
             return _backend.status == 'running'
 
-    def start_backend(self, _name, _volumes={}):
+    def start_backend(self, _name, _volumes=None):
+        if _volumes is None:
+            _volumes = {}
         if not Config.has_docker_backend(_name):
             raise DockerBackendError(f"Backend [{_name}] is not configured")
         if not self.is_backend_running(_name):

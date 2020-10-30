@@ -2,7 +2,7 @@ FROM ubuntu:18.04
 
 COPY pathologysdk-2.0.zip /tmp/pathologysdk-2.0.zip
 
-RUN apt update && apt install -y python3 python3-pip python3-openslide unzip gdebi
+RUN apt update && apt install -y python3 python3-pip python3-numpy python3-openslide unzip gdebi
 
 RUN unzip /tmp/pathologysdk-2.0.zip -d /tmp && \
     gdebi -n /tmp/philips-pathologysdk-2.0-ubuntu18_04_py36_research/pathologysdk-modules/*pixelengine*.deb && \
