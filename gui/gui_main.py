@@ -1,10 +1,12 @@
+import io
 import json
-import matplotlib.pyplot as plt
 import numpy as np
 import os
+from PIL import Image
 import PySimpleGUI as Sg
 from pytypes import typechecked
 import requests
+import traceback
 
 from utils import Config, DockerBackend, DockerBackendError
 
@@ -53,11 +55,8 @@ def gui_main() -> None:
                     ("Generic tiled TIFF", "*.tif"),
                 )
             ),
-        ],
-        [
             Sg.Button('Start', key='-START-'),
             Sg.Button('Stop', key='-STOP-'),
-            Sg.Button('Query', key='-QUERY-'),
         ],
         [
             Sg.Table(
@@ -67,10 +66,24 @@ def gui_main() -> None:
                 num_rows=2,
                 key='runningContainersTable',
                 justification='center',
-                col_widths=[15, 15],
+                col_widths=[24, 25],
                 bind_return_key=True,
             ),
         ],
+        [
+            Sg.Text('Left:'),
+            Sg.Input(key="PATCHLEFT", default_text="14900", size=(6, 1)),
+            Sg.Text('Top:'),
+            Sg.Input(key="PATCHTOP", default_text="14900", size=(6, 1)),
+            Sg.Text('Size:'),
+            Sg.Input(key="PATCHSIZE", default_text="224", size=(6, 1)),
+            Sg.Text('Level:'),
+            Sg.Input(key="PATCHLEVEL", default_text="0", size=(6, 1)),
+            Sg.Button('Query', key='-QUERY-'),
+        ],
+        [
+            Sg.Graph((224, 224), graph_bottom_left=(0, 224), graph_top_right=(224, 0), key="-PATCH-"),
+        ]
     ]
     _window = Sg.Window('Test Area', _layout)
     while True:
@@ -111,18 +124,26 @@ def gui_main() -> None:
             if _docker_backend.is_backend_running('slide'):
                 _query_ports = Config.get_docker_backend_property('slide', 'ports')
                 if _query_ports is not None:
+                    _patch_left = _values['PATCHLEFT']
+                    _patch_top = _values['PATCHTOP']
+                    _patch_size = _values['PATCHSIZE']
+                    _patch_level = _values['PATCHLEVEL']
                     _query_port = _query_ports[list(_query_ports.keys())[0]]
-                    _query_url = f"http://localhost:{_query_port}/patch/1000/1000/64/64"
+                    _query_url = f"http://localhost:{_query_port}/patch/{_patch_left}/{_patch_top}/{_patch_size}/{_patch_size}/{_patch_level}"
                     _req = requests.get(_query_url)
                     _list = json.loads(_req.text)
-                    _array = np.array(_list)
-                    print(_array)
-                    print(_array.shape)
-                    _array.resize((64, 64, 3))
-                    print(_array)
-                    print(_array.shape)
-                    plt.imshow(_array)
-                    plt.show()
+                    _array = np.array(_list, dtype=np.uint8)
+                    _array = np.reshape(_array, (int(_patch_size), int(_patch_size), 3))
+                    try:
+                        im = Image.fromarray(_array, 'RGB')
+                        bio = io.BytesIO()
+                        im.save(bio, format="PNG")
+                        del im
+                        _window.Element('-PATCH-').set_size((int(_patch_size), int(_patch_size)))
+                        _window.Element('-PATCH-').change_coordinates(graph_bottom_left=(0, int(_patch_size)), graph_top_right=(int(_patch_size), 0))
+                        _window.Element('-PATCH-').draw_image(data=bio.getvalue(), location=(0, 0))
+                    except TypeError:
+                        traceback.print_exc()
                 else:
                     Sg.PopupError('Ports for query not properly configured in container')
             else:

@@ -185,6 +185,11 @@ def get_patch(left, top, width, height):
     return grab_pixel_data(left, top, width, height)
 
 
+@app.route('/patch/<int:left>/<int:top>/<int:width>/<int:height>/<int:level>')
+def get_patch_with_level(left, top, width, height, level):
+    return grab_pixel_data(left, top, width, height, level)
+
+
 @app.route('/hello')
 def hello_world():
     return f"Hello, World!"
