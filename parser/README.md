@@ -30,4 +30,6 @@ docker run --rm -it -v ${PWD}/images/wsi1.isyntax:/tmp/slide.isyntax -p 8080:800
 ### Backend API
 
 The backend exposes the following API endpoints:
-- `/`
+- `/` - display the version information for the backend
+- `/properties` - displays file properties for the served slide file
+- `/patch/<left>/<top>/<width>/<height>[/<level>]` - returns patch pixels of the given location in the slide
