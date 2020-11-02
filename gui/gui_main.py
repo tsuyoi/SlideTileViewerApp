@@ -134,18 +134,22 @@ def gui_main() -> None:
                                  f"{_patch_size}/{_patch_size}/{_patch_level}"
                     _req = requests.get(_query_url)
                     try:
-                        _image_data = json.loads(_req.text)
-                        _array = np.array(_image_data, dtype=np.uint8)
-                        im = Image.fromarray(_array, 'RGBA')
-                        bio = io.BytesIO()
-                        im.save(bio, format="PNG")
-                        del im
-                        _window.Element('-PATCH-').set_size((_size, _size))
-                        _window.Element('-PATCH-').change_coordinates(
-                            graph_bottom_left=(0, _size),
-                            graph_top_right=(_size, 0)
-                        )
-                        _window.Element('-PATCH-').draw_image(data=bio.getvalue(), location=(0, 0))
+                        _resp = json.loads(_req.text)
+                        if (_resp['success']):
+                            _image_data = _resp['pixels']
+                            _array = np.array(_image_data, dtype=np.uint8)
+                            im = Image.fromarray(_array, 'RGBA')
+                            bio = io.BytesIO()
+                            im.save(bio, format="PNG")
+                            del im
+                            _window.Element('-PATCH-').set_size((_size, _size))
+                            _window.Element('-PATCH-').change_coordinates(
+                                graph_bottom_left=(0, _size),
+                                graph_top_right=(_size, 0)
+                            )
+                            _window.Element('-PATCH-').draw_image(data=bio.getvalue(), location=(0, 0))
+                        else:
+                            Sg.PopupError(_resp['error'], title="Patch Retrieval Error")
                     except Exception:
                         traceback.print_exc()
                 else:
