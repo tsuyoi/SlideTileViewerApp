@@ -5,9 +5,39 @@ import sys
 import traceback
 
 app = Flask(__name__)
-slide_file = os.listdir('/tmp/')[0]
+
+
+"""
+("Aperio", "*.svs, *.tif"),
+("Hamamatsu", "*.vms, *.vmu, *.ndpi"),
+("Leica", "*.scn"),
+("MIRAX", "*.mrxs"),
+("Philips", "*.isyntax, *.tiff"),
+("Sakura", "*.svslide"),
+("Trestle", "*.tif"),
+("Ventana", "*.bif, *.tif"),
+("Generic tiled TIFF", "*.tif"),
+"""
+isyntax_ext = ['.isyntax']
+isyntax_file = None
+
+openslide_exts = ['.bif', '.mrxs', '.ndpi', '.scn', '.svs', '.svslide', '.tif', '.vms', '.vmu']
+openslide_file = None
+
+for file in os.listdir('/tmp/'):
+    file_name, file_ext = os.path.splitext(file)
+    if file_ext in isyntax_ext:
+        isyntax_file = file
+    if file_ext in openslide_exts:
+        openslide_file = file
+
+slide_file = isyntax_file if isyntax_file is not None else openslide_file
+if slide_file is None:
+    exit(1)
+
 slide_path = f"/tmp/{slide_file}"
 slide_name, slide_ext = os.path.splitext(slide_path)
+print(f"slide_file: {slide_file}, slide_path: {slide_path}, slide_name: {slide_name}, slide_ext: {slide_ext}")
 if slide_ext == ".isyntax":
     import pixelengine
 
@@ -80,23 +110,30 @@ if slide_ext == ".isyntax":
         Properties related to input file are used in this method
         :return: Output of file properties
         """
-        num_images = pe_input.num_images
-        output = ""
-        output += "[common properties]" + "\n"
-        output += "pixel engine version : " + pe.version + "\n"
-        output += "barcode : " + str(pe_input.barcode) + "\n"
-        output += "acquisition_datetime : " + str(pe_input.acquisition_datetime) + "\n"
-        output += "date_of_last_calibration : " + str(pe_input.date_of_last_calibration) + "\n"
-        output += "time_of_last_calibration : " + str(pe_input.time_of_last_calibration) + "\n"
-        output += "manufacturer : " + str(pe_input.manufacturer) + "\n"
-        output += "model_name : " + str(pe_input.model_name) + "\n"
-        output += "device_serial_number : " + str(pe_input.device_serial_number) + "\n"
+        props = {
+            'pixel_engine': {
+                'version': pe.version,
+            },
+            'slide': {
+                'barcode': pe_input.barcode,
+                'created': pe_input.acquisition_datetime,
+                'num_images': pe_input.num_images,
+                'last_calibration': {
+                    'date': pe_input.date_of_last_calibration,
+                    'time': pe_input.time_of_last_calibration,
+                },
+                'device': {
+                    'manufacturer': pe_input.manufacturer,
+                    'model': pe_input.model_name,
+                    'serial_number': pe_input.device_serial_number,
+                }
+            }
+        }
         if pe_input.derivation_description:
-            output += "derivation_description : " + pe_input.derivation_description + "\n"
+            props['slide']['derivation_description'] = pe_input.derivation_description
         if pe_input.software_versions:
-            output += "software_versions : " + str(pe_input.software_versions) + "\n"
-        output += "num_images : " + str(num_images) + "\n"
-        return output
+            props['slide']['software_version'] = pe_input.software_versions
+        return jsonify(props)
 
     def width_height_calculation(x_start, x_end, y_start, y_end, dim_ranges):
         """
@@ -200,8 +237,8 @@ else:
             return jsonify(resp)
 
 
-@app.route('/')
-def index():
+@app.route('/properties')
+def slide_properties():
     return image_properties()
 
 
@@ -215,9 +252,12 @@ def get_patch_with_level(left, top, width, height, level):
     return grab_pixel_data(left, top, width, height, level)
 
 
-@app.route('/hello')
-def hello_world():
-    return f"Hello, World!"
+@app.route('/')
+def index():
+    info = {
+        'version': 1.0
+    }
+    return jsonify(info)
 
 
 if __name__ == "__main__":
