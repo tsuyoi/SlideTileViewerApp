@@ -1,6 +1,5 @@
 import io
 import json
-import math
 import numpy as np
 import os
 from PIL import Image
@@ -129,16 +128,15 @@ def gui_main() -> None:
                     _patch_top = _values['PATCHTOP']
                     _patch_size = _values['PATCHSIZE']
                     _patch_level = _values['PATCHLEVEL']
+                    _size = int(int(_patch_size) / max([1, int(_patch_level) * 2]))
                     _query_port = _query_ports[list(_query_ports.keys())[0]]
-                    _query_url = f"http://localhost:{_query_port}/patch/{_patch_left}/{_patch_top}/{_patch_size}/{_patch_size}/{_patch_level}"
+                    _query_url = f"http://localhost:{_query_port}/patch/{_patch_left}/{_patch_top}/" + \
+                                 f"{_patch_size}/{_patch_size}/{_patch_level}"
                     _req = requests.get(_query_url)
-                    _list = json.loads(_req.text)
                     try:
-                        _size = int(int(_patch_size) / max([1, int(_patch_level) * 2]))
-                        _array = np.array(_list, dtype=np.uint8)
-                        print(f"Array size: {_array.shape}, width/height: {math.sqrt(len(_list) / 3)}, size: {_size}")
-                        _array = np.reshape(_array, (_size, _size, 3))
-                        im = Image.fromarray(_array, 'RGB')
+                        _image_data = json.loads(_req.text)
+                        _array = np.array(_image_data, dtype=np.uint8)
+                        im = Image.fromarray(_array, 'RGBA')
                         bio = io.BytesIO()
                         im.save(bio, format="PNG")
                         del im
@@ -148,7 +146,7 @@ def gui_main() -> None:
                             graph_top_right=(_size, 0)
                         )
                         _window.Element('-PATCH-').draw_image(data=bio.getvalue(), location=(0, 0))
-                    except TypeError:
+                    except Exception:
                         traceback.print_exc()
                 else:
                     Sg.PopupError('Ports for query not properly configured in container')

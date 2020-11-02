@@ -134,7 +134,7 @@ if slide_ext == ".isyntax":
         # Calculate patch image size for writting to disk
         # 3 is samples per pixels for RGB
         # 4 is samples per pixels for RGBA
-        pixel_buffer_size = patch_width * patch_height * 3
+        pixel_buffer_size = patch_width * patch_height * 4
         return pixel_buffer_size, patch_width, patch_height
 
     def grab_pixel_data(x_start, y_start, width, height, level=0):
@@ -153,13 +153,14 @@ if slide_ext == ".isyntax":
             app.logger.error(f"{view_ranges}")
             data_envelopes = view.data_envelopes(level)
             app.logger.error(f"{data_envelopes}")
-            regions = view.request_regions(view_ranges, data_envelopes, False, [254, 254, 254])
+            regions = view.request_regions(view_ranges, data_envelopes, False, [0, 0, 0, 0], pe.BufferType(1))
             app.logger.error(f"{regions}")
             region = regions[0]
             pixel_buffer_size, patch_width, patch_height = extract_patch(view, region)
             app.logger.error(f"{pixel_buffer_size} - {patch_width}x{patch_height}")
             pixels = np.empty(int(pixel_buffer_size), dtype=np.uint8)
             region.get(pixels)
+            pixels = np.reshape(pixels, (width, height, 4))
             return jsonify(pixels.tolist())
         except:
             traceback.print_exc()
@@ -168,11 +169,19 @@ if slide_ext == ".isyntax":
 else:
     import openslide
 
-    def image_properties():
-        return "Not iSyntax file"
+    slide = openslide.OpenSlide(slide_path)
 
-    def grab_pixel_data(left, top, width, height):
-        return f"Pixel data for {left}x{top}x{left+width}x{top+height}"
+    def image_properties():
+        props = {}
+        for _key in slide.properties.keys():
+            props[_key] = slide.properties[_key]
+        return jsonify(props)
+
+    def grab_pixel_data(left, top, width, height, level=0):
+        image = slide.read_region((left, top), level, (width, height))
+        pixels = np.array(image.getdata())
+        pixels = np.resize(pixels, (width, height, 4))
+        return jsonify(pixels.tolist())
 
 
 @app.route('/')
