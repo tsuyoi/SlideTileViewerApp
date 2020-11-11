@@ -8,8 +8,23 @@ from pytypes import typechecked
 import requests
 import traceback
 
+from gui import indicator_empty, indicator_off, indicator_on
 from utils import Config, DockerBackend, DockerBackendError
 
+
+def display_patch(_element, _size, _data):
+    if _data is not None:
+        _array = np.array(_data, dtype=np.uint8)
+        im = Image.fromarray(_array, 'RGBA')
+        bio = io.BytesIO()
+        im.save(bio, format="PNG")
+        del im
+        _element.set_size((_size, _size))
+        _element.change_coordinates(
+            graph_bottom_left=(0, _size),
+            graph_top_right=(_size, 0)
+        )
+        _element.draw_image(data=bio.getvalue(), location=(0, 0))
 
 @typechecked
 def gui_main() -> None:
@@ -35,6 +50,18 @@ def gui_main() -> None:
     _headers = [
         "Name", "Image"
     ]
+    """[
+                Sg.Table(
+                    values=_table_data,
+                    headings=_headers,
+                    auto_size_columns=False,
+                    num_rows=2,
+                    key='runningContainersTable',
+                    justification='center',
+                    col_widths=[24, 25],
+                    bind_return_key=True,
+                ),
+            ],"""
     _layout = [
         [
             Sg.Menu(_menu),
@@ -57,18 +84,7 @@ def gui_main() -> None:
             ),
             Sg.Button('Start', key='-START-'),
             Sg.Button('Stop', key='-STOP-'),
-        ],
-        [
-            Sg.Table(
-                values=_table_data,
-                headings=_headers,
-                auto_size_columns=False,
-                num_rows=2,
-                key='runningContainersTable',
-                justification='center',
-                col_widths=[24, 25],
-                bind_return_key=True,
-            ),
+            Sg.Image(data=indicator_off, key='-INDICATOR-', size=(18, 18))
         ],
         [
             Sg.Text('Left:'),
@@ -82,7 +98,14 @@ def gui_main() -> None:
             Sg.Button('Query', key='-QUERY-'),
         ],
         [
-            Sg.Graph((224, 224), graph_bottom_left=(0, 224), graph_top_right=(224, 0), key="-PATCH-"),
+            Sg.Graph(
+                canvas_size=(224, 224),
+                graph_bottom_left=(0, 224),
+                graph_top_right=(224, 0),
+                key="-PATCH-",
+                enable_events=True,
+                drag_submits=True
+            ),
         ]
     ]
     _window = Sg.Window('Test Area', _layout)
@@ -92,6 +115,10 @@ def gui_main() -> None:
             break
 
         # Events
+        if _docker_backend.is_backend_running('slide'):
+            _window.Element('-INDICATOR-').Update(data=indicator_on)
+        else:
+            _window.Element('-INDICATOR-').Update(data=indicator_off)
         if _event == 'Configuration':
             gui_main_configuration(_docker_backend)
         if _event == '-START-':
@@ -121,43 +148,33 @@ def gui_main() -> None:
             except DockerBackendError as e:
                 Sg.PopupError(e, title='Failed to stop image backend')
         if _event == '-QUERY-':
+            _patch_left = _values['PATCHLEFT']
+            _patch_top = _values['PATCHTOP']
+            _patch_size = _values['PATCHSIZE']
+            _patch_level = _values['PATCHLEVEL']
+            _patch_data = None
+            _image_size = int(int(_patch_size) / max([1, int(_patch_level) * 2]))
             if _docker_backend.is_backend_running('slide'):
                 _query_ports = Config.get_docker_backend_property('slide', 'ports')
-                if _query_ports is not None:
-                    _patch_left = _values['PATCHLEFT']
-                    _patch_top = _values['PATCHTOP']
-                    _patch_size = _values['PATCHSIZE']
-                    _patch_level = _values['PATCHLEVEL']
-                    _size = int(int(_patch_size) / max([1, int(_patch_level) * 2]))
+                if _query_ports is not None and len(list(_query_ports.keys())) > 0:
                     _query_port = _query_ports[list(_query_ports.keys())[0]]
                     _query_url = f"http://localhost:{_query_port}/patch/{_patch_left}/{_patch_top}/" + \
                                  f"{_patch_size}/{_patch_size}/{_patch_level}"
-                    _req = requests.get(_query_url)
                     try:
+                        _req = requests.get(_query_url)
                         _resp = json.loads(_req.text)
-                        if (_resp['success']):
-                            _image_data = _resp['pixels']
-                            _array = np.array(_image_data, dtype=np.uint8)
-                            im = Image.fromarray(_array, 'RGBA')
-                            bio = io.BytesIO()
-                            im.save(bio, format="PNG")
-                            del im
-                            _window.Element('-PATCH-').set_size((_size, _size))
-                            _window.Element('-PATCH-').change_coordinates(
-                                graph_bottom_left=(0, _size),
-                                graph_top_right=(_size, 0)
-                            )
-                            _window.Element('-PATCH-').draw_image(data=bio.getvalue(), location=(0, 0))
+                        if _resp['success']:
+                            _patch_data = _resp['pixels']
                         else:
                             Sg.PopupError(_resp['error'], title="Patch Retrieval Error")
                     except Exception:
                         traceback.print_exc()
+                        Sg.PopupError("Failed to query slide Docker backend", title="Patch Retrieval Error")
                 else:
                     Sg.PopupError('Ports for query not properly configured in container')
             else:
                 Sg.PopupError('Slide backend is not currently running')
-        _table_data = _docker_backend.get_running_containers()
-        _window.Element('runningContainersTable').Update(_table_data)
+            display_patch(_window.Element('-PATCH-'), _image_size, _patch_data)
     if _docker_backend.is_backend_running('slide'):
         _docker_backend.stop_backend('slide')
     _docker_backend = None
