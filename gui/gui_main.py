@@ -1,14 +1,11 @@
 import io
-import json
 import numpy as np
 import os
 from PIL import Image
 import PySimpleGUI as Sg
 from pytypes import typechecked
-import requests
-import traceback
 
-from gui import indicator_empty, indicator_off, indicator_on
+from gui import indicator_off, indicator_on
 from utils import Config, DockerBackend, DockerBackendError
 
 
@@ -153,27 +150,16 @@ def gui_main() -> None:
             _patch_size = _values['PATCHSIZE']
             _patch_level = _values['PATCHLEVEL']
             _patch_data = None
-            _image_size = int(int(_patch_size) / max([1, int(_patch_level) * 2]))
-            if _docker_backend.is_backend_running('slide'):
-                _query_ports = Config.get_docker_backend_property('slide', 'ports')
-                if _query_ports is not None and len(list(_query_ports.keys())) > 0:
-                    _query_port = _query_ports[list(_query_ports.keys())[0]]
-                    _query_url = f"http://localhost:{_query_port}/patch/{_patch_left}/{_patch_top}/" + \
-                                 f"{_patch_size}/{_patch_size}/{_patch_level}"
-                    try:
-                        _req = requests.get(_query_url)
-                        _resp = json.loads(_req.text)
-                        if _resp['success']:
-                            _patch_data = _resp['pixels']
-                        else:
-                            Sg.PopupError(_resp['error'], title="Patch Retrieval Error")
-                    except Exception:
-                        traceback.print_exc()
-                        Sg.PopupError("Failed to query slide Docker backend", title="Patch Retrieval Error")
-                else:
-                    Sg.PopupError('Ports for query not properly configured in container')
+            _image_size = (0, 0)
+            _resp = _docker_backend.query_backend('slide', "/patch/" +
+                                                  f"{_patch_left}/{_patch_top}/" +
+                                                  f"{_patch_size}/{_patch_size}/" +
+                                                  f"{_patch_level}")
+            if _resp['success']:
+                _patch_data = _resp['pixels']
+                _image_size = int(int(_patch_size) / max([1, int(_patch_level) * 2]))
             else:
-                Sg.PopupError('Slide backend is not currently running')
+                Sg.PopupError(_resp['error'], title="Patch Retrieval Error")
             display_patch(_window.Element('-PATCH-'), _image_size, _patch_data)
     if _docker_backend.is_backend_running('slide'):
         _docker_backend.stop_backend('slide')

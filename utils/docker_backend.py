@@ -1,6 +1,9 @@
 import docker
 from docker.errors import NotFound
+import json
+import requests
 from pytypes import typechecked
+import traceback
 from typing import Dict
 
 from utils import Config
@@ -54,6 +57,40 @@ class DockerBackend(object):
                 raise DockerBackendError(f"No default image configured for backend [{_name}]")
         else:
             raise DockerBackendError(f"Backend [{_name}] is already running")
+
+    def query_backend(self, _name, _query):
+        if self.is_backend_running(_name):
+            _query_ports = Config.get_docker_backend_property('slide', 'ports')
+            if _query_ports is not None and len(list(_query_ports.keys())) > 0:
+                _query_port = _query_ports[list(_query_ports.keys())[0]]
+                _query_url = f"http://localhost:{_query_port}{_query}"
+                try:
+                    _req = requests.get(_query_url)
+                    return json.loads(_req.text)
+                except requests.RequestException as re:
+                    return {
+                        "success": False,
+                        "error": re.strerror,
+                        "error_obj": re,
+                        "error_traceback": traceback.format_exc()
+                    }
+                except json.JSONDecodeError as jde:
+                    return {
+                        "success": False,
+                        "error": jde.msg,
+                        "error_object": jde,
+                        "error_traceback": traceback.format_exc()
+                    }
+            else:
+                return {
+                    "success": False,
+                    "error": "Docker backend ports are not properly configured",
+                }
+        else:
+            return {
+                "success": False,
+                "error": f"Docker backend [{_name}] is not currently running"
+            }
 
     def stop_backend(self, _name):
         if self.is_backend_running(_name):
